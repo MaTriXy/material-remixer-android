@@ -15,24 +15,22 @@
  */
 
 apply plugin: 'com.android.application'
-apply plugin: 'android-apt'
-
 
 android {
-  compileSdkVersion 24
-  buildToolsVersion '24.0.1'
+  compileSdkVersion rootProject.ext.compileSdkVersion
+  buildToolsVersion rootProject.ext.buildToolsVersion
 
   defaultConfig {
     applicationId "com.google.android.apps.remixer"
-    minSdkVersion 15
-    targetSdkVersion 24
+    minSdkVersion rootProject.ext.minSdkVersion
+    targetSdkVersion rootProject.ext.targetSdkVersion
     versionCode 1
     versionName "1.0"
   }
 
   buildTypes {
     release {
-      minifyEnabled true
+      minifyEnabled rootProject.ext.forceReleaseProguard
       proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
     }
   }
@@ -41,11 +39,19 @@ android {
     sourceCompatibility JavaVersion.VERSION_1_7
     targetCompatibility JavaVersion.VERSION_1_7
   }
+
+  lintOptions {
+    disable 'GradleDependency'
+    textReport true
+    textOutput 'stdout'
+  }
 }
 
 dependencies {
-  compile 'com.android.support:appcompat-v7:24.2.1'
-  compile project(':remixer_core')
-  compile project(':remixer_ui')
+  compile "com.android.support:appcompat-v7:$rootProject.ext.supportLibraryVersion"
+  compile project(':remixer')
   provided project(':remixer_annotation')
 }
+
+// Depend on gms google services for Firebase Support, keep at the bottom.
+apply plugin: 'com.google.gms.google-services'

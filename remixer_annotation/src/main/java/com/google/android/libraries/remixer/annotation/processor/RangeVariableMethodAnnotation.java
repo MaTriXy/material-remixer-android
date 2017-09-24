@@ -16,11 +16,11 @@
 
 package com.google.android.libraries.remixer.annotation.processor;
 
+import com.google.android.libraries.remixer.DataType;
 import com.google.android.libraries.remixer.RangeVariable;
 import com.google.android.libraries.remixer.annotation.RangeVariableMethod;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.MethodSpec;
-import com.squareup.javapoet.TypeName;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 
@@ -29,69 +29,45 @@ import javax.lang.model.element.TypeElement;
  */
 class RangeVariableMethodAnnotation extends MethodAnnotation {
 
-  /**
-   * Statement to create a new RangeVariable.
-   *
-   * <p>Would expand to {@code RangeVariable variableName = new RangeVariable(title, key,
-   * defaultValue, minValue, maxValue, activity, callback, layoutId)}.
-   */
-  private static final String NEW_RANGE_VARIABLE_STATEMENT =
-      "$T $L = new $T($S, $S, $L, $L, $L, $L, $L, $L, $L)";
-
-  private final int minValue;
-  private int defaultValue;
-  private final int increment;
-  private final int maxValue;
+  private final float minValue;
+  private float initialValue;
+  private final float increment;
+  private final float maxValue;
 
   RangeVariableMethodAnnotation(
       TypeElement sourceClass, ExecutableElement sourceMethod, RangeVariableMethod annotation)
       throws RemixerAnnotationException {
-    super(sourceClass, sourceMethod, annotation.key(), annotation.title(), annotation.layoutId());
+    super(
+        sourceClass,
+        sourceMethod,
+        DataType.NUMBER,
+        ClassName.get(RangeVariable.Builder.class),
+        annotation.key(),
+        annotation.title(),
+        annotation.layoutId());
     minValue = annotation.minValue();
     maxValue = annotation.maxValue();
     increment = annotation.increment();
+    initialValue = annotation.initialValue();
     if (minValue > maxValue) {
       throw new RemixerAnnotationException(sourceMethod,
           "minValue cannot be greater than maxValue");
     }
-    if (minValue > annotation.defaultValue() || maxValue < annotation.defaultValue()) {
-      if (annotation.defaultValue() == 0) {
-        defaultValue = minValue;
+    if (minValue > annotation.initialValue() || maxValue < annotation.initialValue()) {
+      if (annotation.initialValue() == 0) {
+        initialValue = minValue;
       } else {
         throw new RemixerAnnotationException(sourceMethod,
-            "defaultValue was explicitly set out of bounds.");
+            "initialValue was explicitly set out of bounds.");
       }
     }
   }
 
   @Override
-  public void addSetupStatements(MethodSpec.Builder methodBuilder) {
-    String callbackName = key + CALLBACK_NAME_SUFFIX;
-    String variableName = key + VARIABLE_SUFFIX;
-    methodBuilder
-        .addStatement(
-            NEW_CALLBACK_STATEMENT,
-            generatedClassName, callbackName, generatedClassName)
-        .addStatement(
-            NEW_RANGE_VARIABLE_STATEMENT,
-            RangeVariable.class,
-            variableName,
-            RangeVariable.class,
-            title,
-            key,
-            defaultValue,
-            minValue,
-            maxValue,
-            increment,
-            ACTIVITY_NAME,
-            callbackName,
-            layoutId)
-        .addStatement(INIT_VARIABLE_STATEMENT, variableName)
-        .addStatement(ADD_VARIABLE_STATEMENT, variableName);
-  }
-
-  @Override
-  public TypeName getVariableType() {
-    return ClassName.get(Integer.class);
+  protected void addSpecificSetupStatements(MethodSpec.Builder methodBuilder) {
+    methodBuilder.addStatement("$L.setMinValue($Lf)", remixerItemName, minValue);
+    methodBuilder.addStatement("$L.setMaxValue($Lf)", remixerItemName, maxValue);
+    methodBuilder.addStatement("$L.setInitialValue($Lf)", remixerItemName, initialValue);
+    methodBuilder.addStatement("$L.setIncrement($Lf)", remixerItemName, increment);
   }
 }

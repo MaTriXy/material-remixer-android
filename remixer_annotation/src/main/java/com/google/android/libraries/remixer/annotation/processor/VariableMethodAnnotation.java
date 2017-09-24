@@ -16,12 +16,13 @@
 
 package com.google.android.libraries.remixer.annotation.processor;
 
-import com.google.android.libraries.remixer.Variable;
+import com.google.android.libraries.remixer.BooleanVariableBuilder;
+import com.google.android.libraries.remixer.DataType;
+import com.google.android.libraries.remixer.StringVariableBuilder;
 import com.google.android.libraries.remixer.annotation.BooleanVariableMethod;
 import com.google.android.libraries.remixer.annotation.StringVariableMethod;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.MethodSpec;
-import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeName;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
@@ -35,34 +36,10 @@ import javax.lang.model.element.TypeElement;
  * RangeVariableMethodAnnotation nor ItemListVariableMethodAnnotation extend this class), since
  * these classes handle mostly the Variable objects' initialization and those are fairly different
  * for each of those classes.
- *
- * <p>Most of what can be shared is shared in MethodAnnotation and also applies to @TriggerMethod
- * annotations as well.
  */
 class VariableMethodAnnotation<T> extends MethodAnnotation {
 
-  /**
-   * Statement to create a new Variable&lt;T&gt;
-   *
-   * <p>Would expand to {@code Variable&lt;T&gt; variableName = new Variable&lt;&gt;(
-   * title, key, defaultValue, activity, callback, layoutId)}.
-   */
-  private static final String NEW_VARIABLE_STATEMENT =
-      "$T $L = new $T($S, $S, $L, $L, $L, $L)";
-
-  /**
-   * Statement to create a new Variable&lt;String&gt;
-   *
-   * <p>Would expand to {@code Variable&lt;String&gt; variableName = new Variable&lt;&gt;(
-   * title, key, "defaultValue", activity, callback, layoutId)}.
-   *
-   * <p>The difference lays in that the defaultValue is treated as a string and quoted, instead of
-   * being treated like a literal
-   */
-  private static final String NEW_STRING_VARIABLE_STATEMENT =
-      "$T $L = new $T($S, $S, $S, $L, $L, $L)";
-
-  private final T defaultValue;
+  private final T initalValue;
 
   static VariableMethodAnnotation<Boolean> forBooleanVariableMethod(
       TypeElement sourceClass, ExecutableElement sourceMethod, BooleanVariableMethod annotation)
@@ -70,10 +47,12 @@ class VariableMethodAnnotation<T> extends MethodAnnotation {
     return new VariableMethodAnnotation<>(
         sourceClass,
         sourceMethod,
+        DataType.BOOLEAN,
+        ClassName.get(BooleanVariableBuilder.class),
         annotation.key(),
         annotation.title(),
         annotation.layoutId(),
-        annotation.defaultValue());
+        annotation.initialValue());
   }
 
   static VariableMethodAnnotation<String> forStringVariableMethod(
@@ -82,56 +61,33 @@ class VariableMethodAnnotation<T> extends MethodAnnotation {
     return new VariableMethodAnnotation<>(
         sourceClass,
         sourceMethod,
+        DataType.STRING,
+        ClassName.get(StringVariableBuilder.class),
         annotation.key(),
         annotation.title(),
         annotation.layoutId(),
-        annotation.defaultValue());
+        annotation.initialValue());
   }
 
   private VariableMethodAnnotation(
       TypeElement sourceClass,
       ExecutableElement sourceMethod,
+      DataType dataType,
+      TypeName builderType,
       String key,
       String title,
       int layoutId,
-      T defaultValue)
+      T initialValue)
       throws RemixerAnnotationException {
-    super(sourceClass, sourceMethod, key, title, layoutId);
-    this.defaultValue = defaultValue;
+    super(sourceClass, sourceMethod, dataType, builderType, key, title, layoutId);
+    this.initalValue = initialValue;
   }
 
   @Override
-  public void addSetupStatements(MethodSpec.Builder methodBuilder) {
-    String callbackVariable = key + CALLBACK_NAME_SUFFIX;
-    String variableName = key + VARIABLE_SUFFIX;
-    ParameterizedTypeName variableClass = ParameterizedTypeName.get(
-        ClassName.get(Variable.class), getVariableType());
-    methodBuilder
-        .addStatement(
-            NEW_CALLBACK_STATEMENT,
-            generatedClassName, callbackVariable, generatedClassName)
-        .addStatement(
-            getNewVariableStatement(),
-            variableClass,
-            variableName,
-            variableClass,
-            title,
-            key,
-            defaultValue,
-            ACTIVITY_NAME,
-            callbackVariable,
-            layoutId)
-        .addStatement(INIT_VARIABLE_STATEMENT, variableName)
-        .addStatement(ADD_VARIABLE_STATEMENT, variableName);
-  }
-
-  private String getNewVariableStatement() {
-    return defaultValue.getClass().equals(String.class)
-        ? NEW_STRING_VARIABLE_STATEMENT : NEW_VARIABLE_STATEMENT;
-  }
-
-  @Override
-  protected TypeName getVariableType() {
-    return ClassName.get(defaultValue.getClass());
+  protected void addSpecificSetupStatements(MethodSpec.Builder methodBuilder) {
+    methodBuilder.addStatement(
+        initalValue.getClass().equals(String.class)
+            ? "$L.setInitialValue($S)" : "$L.setInitialValue($L)",
+        remixerItemName, initalValue);
   }
 }

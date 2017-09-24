@@ -16,14 +16,12 @@
 
 package somepackage;
 
-import com.google.android.libraries.remixer.Remixer;
-import com.google.android.libraries.remixer.annotation.RemixerInstance;
 import com.google.android.libraries.remixer.annotation.StringListVariableMethod;
 
 public class EmptyList {
   /**
    * List is empty explicitly! Fail
    */
-  @StringListVariableMethod(possibleValues = {})
+  @StringListVariableMethod(limitedToValues = {})
   public void fail(String i){}
 }

@@ -35,7 +35,7 @@ import java.util.List;
  */
 @Keep
 public class ItemListVariableWidget extends RelativeLayout
-    implements RemixerItemWidget<ItemListVariable<?>> {
+    implements RemixerWidget<ItemListVariable<?>> {
 
   private TextView nameText;
   private Spinner spinner;
@@ -61,8 +61,8 @@ public class ItemListVariableWidget extends RelativeLayout
   }
 
   @Override
-  public void bindRemixerItem(@NonNull final ItemListVariable variable) {
-    values = variable.getValueList();
+  public void bindVariable(@NonNull final ItemListVariable variable) {
+    values = variable.getLimitedToValues();
     int position = values.indexOf(variable.getSelectedValue());
     nameText.setText(variable.getTitle());
     spinner.setAdapter(

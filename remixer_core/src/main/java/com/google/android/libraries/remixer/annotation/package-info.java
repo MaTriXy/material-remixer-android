@@ -19,23 +19,20 @@
  * initialize Remixes.
  *
  * These annotations can only be used inside a public or default-access top-level class (No nested
- * classes) that extend android.app.Activity.
+ * classes) that extends android.app.Activity.
  *
- * If you decide to use Remixer Annotations in any class you must use @RemixerInstance to annotate
- * an instance of {@link com.google.android.libraries.remixer.Remixer}, and call {@link
+ * If you decide to use Remixer Annotations in any class you mus call {@link
  * com.google.android.libraries.remixer.annotation.RemixerBinder#bind(java.lang.Object)} from your
- * {@code onCreate(...)} passing the activity, this will set up Remixer for you, even creating the
- * instance.
+ * {@code onCreate(...)} passing the activity, this will set up Remixer for you.
  *
  * All of the other Remixer Method annotations in this package can be applied to any public or
- * default-access non-abstract instance method that takes one parameter of the right type (or no
- * parameters in the case of TriggerMethod). They all have sensible, convenient defaults explained
- * in their own documentation.
+ * default-access non-abstract instance method that takes one parameter of the right type.
+ * They all have sensible, convenient defaults explained in their own documentation.
  *
  * You can control the order in which remixes are added by moving the annotated methods in code,
  * Remixer will respect the order in which the methods are defined.
  *
  * It is possible to use both annotations and explicit Variable instantiations, you just have to add
- * your explicit remixer item instantiations after the call to RemixerBinder.bind.
+ * your explicit variable instantiations after the call to RemixerBinder.bind.
  */
 package com.google.android.libraries.remixer.annotation;

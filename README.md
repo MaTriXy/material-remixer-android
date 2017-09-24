@@ -1,45 +1,41 @@
-# ![Remixer](https://cdn.rawgit.com/material-foundation/material-remixer/master/docs/assets/lockup_remixer_icon_horizontal_dark_small.svg)
+# <img align="center" src="docs/small_logo.png"> Remixer for Android
 
-Remixer helps teams use and refine design specs by providing an abstraction for these values that is accessible and configurable from both inside and outside the app itself. 
+<img align="right" src="docs/remixer_screenshot.png" width="300px">
 
-This SDK for Android is currently in development.
+[![TravisCI Build Status](https://travis-ci.org/material-foundation/material-remixer-android.svg?branch=develop)](https://travis-ci.org/material-foundation/material-remixer-android) [![CircleCI Build Status](https://circleci.com/gh/material-foundation/material-remixer-android.svg?style=shield)](https://circleci.com/gh/material-foundation/material-remixer-android) [![codecov](https://codecov.io/gh/material-foundation/material-remixer-android/branch/develop/graph/badge.svg)](https://codecov.io/gh/material-foundation/material-remixer-android) [![Release](https://jitpack.io/v/material-foundation/material-remixer-android.svg )](https://jitpack.io/#material-foundation/material-remixer-android) [![Chat](https://img.shields.io/discord/216272340709801984.svg)](https://discord.gg/material-remixer)
 
-**New to Remixer?** Visit our [main repo](https://github.com/material-foundation/material-remixer) to get a full description of what it is and how it works.
-- - -
+Remixer is a framework to iterate quickly on UI changes by allowing you to adjust UI variables without needing to rebuild (or even restart) your app. You can adjust Numbers, Colors, Booleans, and Strings. To see it in action check out the [example app](https://github.com/material-foundation/material-remixer-android/tree/develop/remixer_example).
 
-## Project structure
+If you are interested in using Remixer in another platform, you may want to check out the [iOS](https://github.com/material-foundation/material-remixer-ios) and [Javascript](https://github.com/material-foundation/material-remixer-js) repos. With any of the three platforms you can use the [Remote Controller](https://github.com/material-foundation/material-remixer-remote-web).
 
-The project is defined as a gradle project with submodules.
+## Using Remixer in your app
 
-* remixer_core: The core framework code, has no dependencies on the android framework and contains the core logic to run callbacks on changes to a Variable, etc. Most of the base classes are here
-  * main: The code for the core framework
-  * tests: JUnit tests for the Remixer code.
-* remixer_ui: The code that shows remixes in the UI.
-  * main
-    * `com.google.android.libraries.remixer.ui.view` is  the code to display the UI as a BottomSheetFragmentDialog
-    * `com.google.android.libraries.remixer.ui.widget` is a family of widgets that can display each individual Remixer item (variable or trigger).
-    * `com.google.android.libraries.remixer.ui.widget.RemixerItemWidget` is an Interface to implement such widgets. Necessary if you want to provide different widgets.
-    * `com.google.android.libraries.remixer.ui.RemixerCallbacks` is an implementation of `Application.ActivityLifecycleCallbacks` that clears up callbacks once the corresponding activity is destroyed so it doesn't leak. It needs to be registered in the `Application.onCreate()` method.
-  * tests: JUnit/Robolectric tests.
-* remixer_annotation: An annotation processor to make it easier to add remixes to your code.
-  * main: The annotation processing code.
-  * tests: JUnit tests based on actual classes to compile.
-* remixer_example: This is an example app.
-  * main: the code for the example app
+The following docs explain how to get Remixer up and running in your app, and details on what Variable types are currently supported.
 
-## Building
+- [Using Remixer](docs/USING_REMIXER.md)
+- [Configure the UI](docs/CONFIGURE_UI.md)
+- [Supported Data Types](docs/SUPPORTED_DATA_TYPES.md)
+- (Optionally) [Configure the Firebase Remote Controller](docs/CONFIGURE_FIREBASE.md)
 
-1. Clone the repository
-   ```git clone https://github.com/material-foundation/material-remixer-android.git```
-2. You have two options here:
-  1. Open it on Android Studio and build from there.
-  2. run `./gradlew build`  on your terminal (`gradlew.bat build` on Windows).
-    * This assumes that you have a copy of the android SDK and,
-    * That you have exported a `ANDROID_HOME` environment variable that points to your SDK install (the directory that contains subdirectories such as `tools`, `platform-tools`, etc.)
-      * If you use Android Studio on a mac that defaults to `/Users/<yourusername>/Library/Android/sdk`
-      * In this case you can put `export ANDROID_HOME=/Users/<yourusername>/Library/Android/sdk` in your `~/.profile` or `~/.bash_profile` as appropriate.)
+## Contributing to Remixer
 
-## Installing the example app
+We're excited you want to contribute to the project! Please read these docs so we can get your contributions submitted quickly.
 
-If you're reading this you're probably installing the app from the terminal as opposed to Android Studio.
-```adb install -r remixer_example/build/outputs/apk/remixer_example-debug.apk```
+- [Contribution policy and guidelines](docs/CONTRIBUTING.md)
+- [Project structure](docs/PROJECT_STRUCTURE.md)
+- [Extending Remixer](docs/EXTENDING_REMIXER.md)
+
+## API Reference
+
+_Notice this includes internal APIs_:
+
+- [Current Version 1.0](https://jitpack.io/com/github/material-foundation/material-remixer-android/remixer/1.0/javadoc/index.html)
+- [Develop Snapshot](https://jitpack.io/com/github/material-foundation/material-remixer-android/remixer/develop-SNAPSHOT/javadoc/index.html)
+
+## Is material-foundation affiliated with Google?
+
+Yes, the [material-foundation](https://github.com/material-foundation) organization is one of Google's new homes for tools and frameworks related to our [Material Design](https://material.io) system. Please check out our blog post [Design is Never Done](https://design.google.com/articles/design-is-never-done/) for more information regarding Material Design and how Remixer integrates with the system.
+
+## License
+
+© Google, 2016. Licensed under an [Apache-2](https://github.com/material-foundation/material-remixer-android/blob/develop/LICENSE) license.

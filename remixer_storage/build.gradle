@@ -15,14 +15,18 @@
  */
 
 apply plugin: 'com.android.library'
+apply plugin: 'com.github.dcendents.android-maven'
+apply plugin: 'com.vanniktech.android.junit.jacoco'
+
+group = 'com.github.material-foundation'
 
 android {
-  compileSdkVersion 24
-  buildToolsVersion "24.0.1"
+  compileSdkVersion rootProject.ext.compileSdkVersion
+  buildToolsVersion rootProject.ext.buildToolsVersion
 
   defaultConfig {
-    minSdkVersion 15
-    targetSdkVersion 24
+    minSdkVersion rootProject.ext.minSdkVersion
+    targetSdkVersion rootProject.ext.targetSdkVersion
     versionCode 1
     versionName "1.0"
 
@@ -30,20 +34,30 @@ android {
 
   }
   buildTypes {
+    debug {
+      testCoverageEnabled true
+    }
     release {
       minifyEnabled false
       proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
     }
   }
+
+  lintOptions {
+    disable 'GradleDependency'
+    textReport true
+    textOutput 'stdout'
+  }
 }
 
 dependencies {
   compile project(':remixer_core')
-  compile project(':remixer_ui')
-  compile 'com.google.code.gson:gson:2.7'
+  compile "com.google.code.gson:gson:$gsonVersion"
+  compile "com.google.firebase:firebase-core:$firebaseVersion"
+  compile "com.google.firebase:firebase-database:$firebaseVersion"
   androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
     exclude group: 'com.android.support', module: 'support-annotations'
   })
-  testCompile 'junit:junit:4.12'
-  testCompile 'org.robolectric:robolectric:3.1.1'
+  testCompile "junit:junit:$junitVersion"
+  testCompile "org.robolectric:robolectric:$robolectricVersion"
 }

@@ -16,19 +16,28 @@
 
 package com.google.android.libraries.remixer.ui.view;
 
-import android.content.Context;
+import android.app.ActionBar;
+import android.hardware.SensorEventListener;
 import android.os.Bundle;
 import android.support.design.widget.BottomSheetDialogFragment;
+import android.support.design.widget.FloatingActionButton;
 import android.support.v4.app.FragmentActivity;
+import android.support.v4.app.FragmentManager;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.Animation;
+import android.view.animation.Transformation;
 import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import com.google.android.libraries.remixer.Remixer;
+import com.google.android.libraries.remixer.storage.FirebaseRemoteControllerSyncer;
 import com.google.android.libraries.remixer.ui.R;
 import com.google.android.libraries.remixer.ui.gesture.Direction;
 import com.google.android.libraries.remixer.ui.gesture.GestureListener;
+import com.google.android.libraries.remixer.ui.gesture.ShakeListener;
 
 /**
  * A fragment that shows all Remixes for the current activity. It's very easy to use:
@@ -48,11 +57,27 @@ import com.google.android.libraries.remixer.ui.gesture.GestureListener;
  * }
  * </code></pre>
  */
-public class RemixerFragment extends BottomSheetDialogFragment {
+public class RemixerFragment
+    extends BottomSheetDialogFragment
+    implements FirebaseRemoteControllerSyncer.SharingStatusListener {
 
   public static final String REMIXER_TAG = "Remixer";
+  // 195ms is a good time for elements leaving the screen.
+  // https://material.io/guidelines/motion/duration-easing.html#duration-easing-common-durations
+  protected static final int COLLAPSE_DRAWER_DURATION = 195;
+
+  // 225ms is a good time for elements entering the screen.
+  // https://material.io/guidelines/motion/duration-easing.html#duration-easing-common-durations
+  protected static final int EXPAND_DRAWER_DURATION = 225;
 
   private Remixer remixer;
+  private ShakeListener shakeListener;
+  private boolean isNetworkBasedSync;
+  private ImageView expandSharingOptionsButton;
+  private Button sharedStatusButton;
+  private RemixerAdapter adapter;
+  private boolean isShowingDrawer = false;
+  private RemixerShareDrawer shareDrawer;
 
   public RemixerFragment() {
     remixer = Remixer.getInstance();
@@ -61,6 +86,11 @@ public class RemixerFragment extends BottomSheetDialogFragment {
   public static RemixerFragment newInstance() {
     return new RemixerFragment();
   }
+
+  private boolean isAddingFragment = false;
+  private final Object syncLock = new Object();
+
+  private SensorEventListener sensorEventListener;
 
   /**
    * Attach this instance to {@code button}'s OnClick, so that clicking the button shows this
@@ -73,9 +103,42 @@ public class RemixerFragment extends BottomSheetDialogFragment {
 
       @Override
       public void onClick(View view) {
-        show(activity.getSupportFragmentManager(), REMIXER_TAG);
+        showRemixer(activity.getSupportFragmentManager(), REMIXER_TAG);
       }
     });
+  }
+
+  /**
+   *
+   * @param manager
+   * @param tag
+   * @return whether the fragment was shown or not.
+   */
+
+  public void showRemixer(FragmentManager manager, String tag) {
+    synchronized(syncLock) {
+      if (!isAddingFragment && !isAdded()) {
+        isAddingFragment = true;
+        show(manager, tag);
+      }
+    }
+  }
+
+  // TODO(nicksahler): Generalize to attaching to any SensorEventListener
+  /**
+   * Attach this instance to a shake gesture and show fragment when magnitude exceeds {@code threshold}
+   */
+  public void attachToShake(final FragmentActivity activity, final double threshold) {
+    shakeListener = new ShakeListener(activity, threshold, this);
+    shakeListener.attach();
+  }
+
+  /**
+   * Detach from a shake gesture
+   */
+  public void detachFromShake() {
+    shakeListener.detach();
+    shakeListener = null;
   }
 
   /**
@@ -100,20 +163,127 @@ public class RemixerFragment extends BottomSheetDialogFragment {
                            ViewGroup container,
                            Bundle savedInstanceState) {
     View view = inflater.inflate(R.layout.fragment_remixer_list, container, false);
-
+    ImageView closeButton = (ImageView) view.findViewById(R.id.closeButton);
+    shareDrawer = (RemixerShareDrawer) view.findViewById(R.id.shareDrawer);
+    isShowingDrawer = false;
+    ShareDrawerOnClickListener listener = new ShareDrawerOnClickListener();
+    expandSharingOptionsButton = (ImageView) view.findViewById(R.id.expandSharingOptionsButton);
+    sharedStatusButton = (Button) view.findViewById(R.id.sharedStatusButton);
+    expandSharingOptionsButton.setOnClickListener(listener);
+    sharedStatusButton.setOnClickListener(listener);
+    closeButton.setOnClickListener(new View.OnClickListener() {
+      @Override
+      public void onClick(View view) {
+        RemixerFragment.this.getFragmentManager().beginTransaction().remove(RemixerFragment.this).commit();
+      }
+    });
     RecyclerView recyclerView = (RecyclerView) view.findViewById(R.id.remixerList);
-    recyclerView.setAdapter(
-        new RemixerAdapter(remixer.getRemixerItemsForParentObject(getActivity())));
+    adapter = new RemixerAdapter(remixer.getVariablesWithContext(getActivity()));
+    recyclerView.setAdapter(adapter);
     return view;
   }
 
   @Override
-  public void onAttach(Context context) {
-    super.onAttach(context);
+  public void onResume() {
+    isAddingFragment = false;
+    isNetworkBasedSync =
+        Remixer.getInstance().getSynchronizationMechanism()
+            instanceof FirebaseRemoteControllerSyncer;
+    if (isNetworkBasedSync) {
+      expandSharingOptionsButton.setVisibility(View.VISIBLE);
+      ((FirebaseRemoteControllerSyncer) Remixer.getInstance().getSynchronizationMechanism())
+          .addSharingStatusListener(this);
+      shareDrawer.init();
+    }
+    super.onResume();
   }
 
   @Override
   public void onDetach() {
     super.onDetach();
+  }
+
+  @Override
+  public void updateSharingStatus(boolean sharing) {
+    sharedStatusButton.setVisibility(sharing ? View.VISIBLE : View.GONE);
+  }
+
+  public void attachToFab(final FragmentActivity activity, FloatingActionButton fab) {
+    fab.setOnClickListener(new View.OnClickListener() {
+      @Override
+      public void onClick(View v) {
+        showRemixer(activity.getSupportFragmentManager(), REMIXER_TAG);
+      }
+    });
+  }
+
+  private class ShareDrawerOnClickListener implements View.OnClickListener {
+
+    @Override
+    public void onClick(View view) {
+      isShowingDrawer = !isShowingDrawer;
+      if (isShowingDrawer) {
+        expandSharingOptionsButton.setImageResource(R.drawable.ic_expand_less_black_24dp);
+        expandSharingOptionsButton.setContentDescription(
+            getResources().getString(R.string.collapse_sharing_options_drawer));
+        expandShareDrawer();
+      } else {
+        expandSharingOptionsButton.setImageResource(R.drawable.ic_expand_more_black_24dp);
+        expandSharingOptionsButton.setContentDescription(
+            getResources().getString(R.string.expand_sharing_options_drawer));
+        collapseShareDrawer();
+      }
+    }
+  }
+
+  private void collapseShareDrawer() {
+    final int initialHeight = shareDrawer.getMeasuredHeight();
+    shareDrawer.setVisibility(View.VISIBLE);
+    Animation a = new Animation() {
+      @Override
+      protected void applyTransformation(float interpolatedTime, Transformation t) {
+        if (interpolatedTime == 1) {
+          shareDrawer.setVisibility(View.GONE);
+        } else {
+          shareDrawer.getLayoutParams().height =
+              initialHeight - (int) (initialHeight * interpolatedTime);
+          shareDrawer.requestLayout();
+        }
+      }
+
+      @Override
+      public boolean willChangeBounds() {
+        return true;
+      }
+    };
+    a.setDuration(COLLAPSE_DRAWER_DURATION);
+    shareDrawer.startAnimation(a);
+  }
+
+
+  private void expandShareDrawer() {
+    shareDrawer.measure(
+        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+    final int targetHeight = shareDrawer.getMeasuredHeight();
+    shareDrawer.setVisibility(View.VISIBLE);
+    // Workaround for API < 21
+    shareDrawer.getLayoutParams().height = 1;
+    Animation a = new Animation() {
+      @Override
+      protected void applyTransformation(float interpolatedTime, Transformation t) {
+        shareDrawer.getLayoutParams().height =
+            interpolatedTime == 1
+                ? LinearLayout.LayoutParams.WRAP_CONTENT
+                : (int) (targetHeight * interpolatedTime);
+        shareDrawer.requestLayout();
+      }
+
+      @Override
+      public boolean willChangeBounds() {
+        return true;
+      }
+    };
+    a.setDuration(EXPAND_DRAWER_DURATION);
+    shareDrawer.startAnimation(a);
   }
 }

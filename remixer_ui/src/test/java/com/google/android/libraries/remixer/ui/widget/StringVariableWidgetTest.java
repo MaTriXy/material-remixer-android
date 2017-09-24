@@ -23,8 +23,9 @@ import static org.mockito.Mockito.verify;
 import android.view.LayoutInflater;
 import android.widget.EditText;
 import android.widget.TextView;
-import com.google.android.libraries.remixer.Variable;
 import com.google.android.libraries.remixer.Callback;
+import com.google.android.libraries.remixer.StringVariableBuilder;
+import com.google.android.libraries.remixer.Variable;
 import com.google.android.libraries.remixer.ui.R;
 import org.junit.Before;
 import org.junit.Test;
@@ -56,17 +57,16 @@ public class StringVariableWidgetTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    variable = new Variable<>(
-        TITLE,
-        KEY,
-        DEFAULT_VALUE,
-        this,
-        mockCallback,
-        R.layout.string_variable_widget);
-    variable.init();
+    variable = new StringVariableBuilder()
+        .setInitialValue(DEFAULT_VALUE)
+        .setTitle(TITLE)
+        .setKey(KEY)
+        .setContext(this)
+        .setCallback(mockCallback)
+        .build();
     view = (StringVariableWidget) LayoutInflater.from(RuntimeEnvironment.application)
         .inflate(R.layout.string_variable_widget, null);
-    view.bindRemixerItem(variable);
+    view.bindVariable(variable);
     text = (EditText) view.findViewById(R.id.stringVariableText);
     name = (TextView) view.findViewById(R.id.variableName);
   }
@@ -79,10 +79,10 @@ public class StringVariableWidgetTest {
 
   @Test
   public void callbackIsCalled() {
-    // Check that the callback  was called. This should've happened during setUp()
-    verify(mockCallback, times(1)).onValueSet(variable);
+    // Check that the callback  was called. This should've happened during setUp() twice
+    verify(mockCallback, times(2)).onValueSet(variable);
     text.setText("green");
     // After changing the text, check that the callback was called once again
-    verify(mockCallback, times(2)).onValueSet(variable);
+    verify(mockCallback, times(3)).onValueSet(variable);
   }
 }

@@ -16,14 +16,12 @@
 
 package somepackage;
 
-import com.google.android.libraries.remixer.Remixer;
-import com.google.android.libraries.remixer.annotation.RemixerInstance;
 import com.google.android.libraries.remixer.annotation.StringListVariableMethod;
 
 public class MethodWithWrongParameter {
   /**
    * This method should take a string parameter, fail
    */
-  @StringListVariableMethod(possibleValues = {"hello","world"})
+  @StringListVariableMethod(limitedToValues = {"hello","world"})
   public void fail(Integer i){}
 }

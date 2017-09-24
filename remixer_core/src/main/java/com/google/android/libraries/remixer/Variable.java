@@ -16,8 +16,8 @@
 
 package com.google.android.libraries.remixer;
 
-import java.util.List;
-import java.util.Locale;
+import com.google.android.libraries.remixer.serialization.StoredVariable;
+import java.lang.ref.WeakReference;
 
 /**
  * Base class for all Remixes that does not do any value checking. A variable takes care of calling
@@ -25,7 +25,37 @@ import java.util.Locale;
  *
  * <p><b>This class is not thread-safe and should only be used from the main thread.</b>
  */
-public class Variable<T> extends RemixerItem {
+public class Variable<T> {
+
+  /**
+   * The name to display in the UI for this variable.
+   */
+  private final String title;
+  /**
+   * The key to use to identify this item across storage and all the interfaces.
+   */
+  private final String key;
+  /**
+   * The layout to inflate to display this variable. If set to 0, the default layout associated
+   * with the variable type will be used.
+   */
+  private final int layoutId;
+  /**
+   * A weak reference to this RemixerItem's context. The RemixerItem's lifecycle is tied to its
+   * contexts'.
+   *
+   * <p>It should be a reference to an activity, but it isn't since remixer_core cannot depend on
+   * Android classes. It is a weak reference in order not to leak the activity accidentally.
+   */
+  private final WeakReference<Object> context;
+  /**
+   * The remixer instance this RemixerItem has been attached to.
+   */
+  protected Remixer remixer;
+  /**
+   * The data type held in this RemixerItem.
+   */
+  private DataType dataType;
 
   /**
    * The callback to be executed when the value is updated.
@@ -38,37 +68,73 @@ public class Variable<T> extends RemixerItem {
    * @param key The key to use to save to SharedPreferences. This needs to be unique across all
    *     Remixes.
    * @param title The name to display in the UI.
-   * @param defaultValue The default value for this Variable.
-   * @param parentObject the object which created this variable, should be an activity.
+   * @param initialValue The initial value for this Variable.
+   * @param context the object which created this variable, should be an activity.
    * @param callback A callback to execute when the value is updated. Can be {@code null}.
    * @param layoutId A layout to inflate when displaying this Variable in the UI.
+   * @param dataType The data type this variable contains.
    */
-  // TODO(miguely): Add default value semantics to the defaultValue, currently it behaves mostly
-  // as an initial value. It should be used in cases when the value is set to an invalid value from
-  // SharedPreferences or Firebase.
-  public Variable(
+  protected Variable(
       String title,
       String key,
-      T defaultValue,
-      Object parentObject,
+      T initialValue,
+      Object context,
       Callback<T> callback,
-      int layoutId) {
-    super(title, key, parentObject, layoutId);
-    // TODO(miguely): pull this out of SharedPreferences.
-    this.selectedValue = defaultValue;
+      int layoutId,
+      DataType dataType) {
+    this.title = title;
+    this.key = key;
+    this.context = new WeakReference<>(context);
+    this.layoutId = layoutId;
+    this.dataType = dataType;
+    this.selectedValue = initialValue;
     this.callback = callback;
   }
 
   /**
-   * Makes sure the default value is valid for this variable and runs the callback if so. This must
+   * Makes sure the initial value is valid for this variable and runs the callback if so. This must
    * be called as soon as the Variable is created.
    *
-   * @throws IllegalArgumentException The currently selected value (or default value) is invalid for
+   * @throws IllegalArgumentException The currently selected value (or initial value) is invalid for
    *     this Variable. See {@link #checkValue(Object)}.
    */
   public final void init() {
     checkValue(selectedValue);
     runCallback();
+  }
+
+  public DataType getDataType() {
+    return dataType;
+  }
+
+  public String getTitle() {
+    return title;
+  }
+
+  public String getKey() {
+    return key;
+  }
+
+  /**
+   * Returns the layout id to inflate when displaying this variable.
+   */
+  public int getLayoutId() {
+    return layoutId;
+  }
+
+  /**
+   * Returns the context.
+   */
+  Object getContext() {
+    return context.get();
+  }
+
+  /**
+   * Set the current remixer instance. This allows the variable to notify other variables with the
+   * same key.
+   */
+  public void setRemixer(Remixer remixer) {
+    this.remixer = remixer;
   }
 
   /**
@@ -78,10 +144,6 @@ public class Variable<T> extends RemixerItem {
 
   public T getSelectedValue() {
     return selectedValue;
-  }
-
-  public Class getVariableType() {
-    return selectedValue.getClass();
   }
 
   /**
@@ -108,16 +170,23 @@ public class Variable<T> extends RemixerItem {
   }
 
   /**
-   * Sets the selected value to a new value without notifying other variables of this change. Only
-   * for internal use
+   * Sets the selected value to a new value without notifying other variables of this change.
+   * <b>Only for internal use!!</b>
    *
    * @param newValue Value to set. Cannot be null.
    * @throws IllegalArgumentException {@code newValue} is an invalid value for this Variable.
    */
-  void setValueWithoutNotifyingOthers(T newValue) {
+  public void setValueWithoutNotifyingOthers(T newValue) {
     checkValue(newValue);
     selectedValue = newValue;
     runCallback();
+  }
+
+  /**
+   * Gets the serializable constraints string for this variable.
+   */
+  public String getSerializableConstraints() {
+    return StoredVariable.VARIABLE_CONSTRAINT;
   }
 
   /**
@@ -129,48 +198,12 @@ public class Variable<T> extends RemixerItem {
       // This instance hasn't been added to a Remixer, probably still being set up, abort.
       return;
     }
-    List<RemixerItem> itemList = remixer.getItemsWithKey(getKey());
-    for (RemixerItem item : itemList) {
-      if (item != this) {
-        ((Variable<T>) item).setValueWithoutNotifyingOthers(getSelectedValue());
-      }
-    }
+    remixer.onValueChanged(this);
   }
 
   private void runCallback() {
     if (callback != null) {
       callback.onValueSet(this);
-    }
-  }
-
-  @Override
-  void clearCallback() {
-    callback = null;
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  void assertIsCompatibleWith(RemixerItem item) {
-    if (item.getKey().equals(getKey())) {
-      if (item.getClass() != getClass()) {
-        throw new IncompatibleRemixerItemsWithSameKeyException(
-            String.format(
-                Locale.getDefault(),
-                "%s is incompatible with %s with same key %s",
-                getClass().getCanonicalName(),
-                item.getClass().getCanonicalName(),
-                getKey()));
-      }
-      Variable<T> variable = (Variable<T>) item;
-      if (variable.getVariableType() != getVariableType()) {
-        throw new IncompatibleRemixerItemsWithSameKeyException(
-            String.format(
-                Locale.getDefault(),
-                "Two variables with the same key, %s, have different types %s and %s",
-                getKey(),
-                getVariableType().getCanonicalName(),
-                variable.getVariableType().getCanonicalName()));
-      }
     }
   }
 
@@ -183,69 +216,20 @@ public class Variable<T> extends RemixerItem {
    * <li>If the title is not set, the key will be used as title
    * </ul>
    *
-   * <p>On the other hand: key is mandatory. If it's missing, an {@link IllegalArgumentException}
-   * will be thrown.
+   * <p>On the other hand: key, dataType, and context are mandatory. If they're missing, an
+   * {@link IllegalArgumentException} will be thrown.
    */
-  public static class Builder<T> {
+  public static class Builder<T> extends BaseVariableBuilder<Variable<T>, T> {
 
-    private String key;
-    private String title;
-    private T defaultValue;
-    private Object parentObject;
-    private Callback<T> callback;
-    private int layoutId = 0;
-
-    public Builder() {}
-
-    public Builder<T> setKey(String key) {
-      this.key = key;
-      return this;
-    }
-
-    public Builder<T> setTitle(String title) {
-      this.title = title;
-      return this;
-    }
-
-    public Builder<T> setDefaultValue(T defaultValue) {
-      this.defaultValue = defaultValue;
-      return this;
-    }
-
-    public Builder<T> setParentObject(Object parentObject) {
-      this.parentObject = parentObject;
-      return this;
-    }
-
-    public Builder<T> setCallback(Callback<T> callback) {
-      this.callback = callback;
-      return this;
-    }
-
-    public Builder<T> setLayoutId(int layoutId) {
-      this.layoutId = layoutId;
-      return this;
-    }
-
-    /**
-     * Returns a new Variable created with the configuration stored in this builder instance.
-     *
-     * @throws IllegalArgumentException If key is missing
-     */
-    public Variable<T> buildAndInit() {
-      if (key == null) {
-        throw new IllegalArgumentException("key cannot be unset for Variable");
-      }
-      if (parentObject == null) {
-        throw new IllegalArgumentException("parentObject cannot be unset for Variable");
-      }
-      if (title == null) {
-        title = key;
-      }
+    @Override
+    public Variable<T> build() {
+      checkBaseFields();
       Variable<T> variable =
-          new Variable<T>(title, key, defaultValue, parentObject, callback, layoutId);
+          new Variable<T>(title, key, initialValue, context, callback, layoutId, dataType);
       variable.init();
       return variable;
     }
+
+    public Builder() {}
   }
 }

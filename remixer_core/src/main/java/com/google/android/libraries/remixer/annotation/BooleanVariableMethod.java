@@ -24,9 +24,7 @@ import java.lang.annotation.Target;
 /**
  * Annotation to apply to a method to turn it into a Variable&lt;Boolean&gt;.
  *
- * <p>Note: It has to be used on a public or default-access method in the same class that has a
- *
- * @RemixerInstance annotated field.
+ * <p>Note: It has to be used on a public or default-access method.
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.CLASS)
@@ -46,9 +44,9 @@ public @interface BooleanVariableMethod {
   String title() default "";
 
   /**
-   * The default value for this variable, assumes false as default.
+   * The initial value for this variable, assumes false as if unset.
    */
-  boolean defaultValue() default false;
+  boolean initialValue() default false;
 
   /**
    * The layout id to inflate when displaying this Variable. If not specified a default will be

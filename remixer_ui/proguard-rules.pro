@@ -14,7 +14,19 @@
 -keep interface com.google.android.libraries.remixer.annotation.RemixerBinder$Binder
 
 -keepnames class * {
-   @com.google.android.libraries.remixer.annotation.RemixerInstance *;
+   @com.google.android.libraries.remixer.annotation.BooleanVariableMethod <methods>;
+}
+-keepnames class * {
+   @com.google.android.libraries.remixer.annotation.ColorListVariableMethod <methods>;
+}
+-keepnames class * {
+   @com.google.android.libraries.remixer.annotation.RangeVariableMethod <methods>;
+}
+-keepnames class * {
+   @com.google.android.libraries.remixer.annotation.StringVariableMethod <methods>;
+}
+-keepnames class * {
+   @com.google.android.libraries.remixer.annotation.StringListVariableMethod <methods>;
 }
 
 -keep class * implements com.google.android.libraries.remixer.annotation.RemixerBinder$Binder {

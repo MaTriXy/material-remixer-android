@@ -16,6 +16,7 @@
 
 package com.google.android.libraries.remixer;
 
+import com.google.android.libraries.remixer.serialization.StoredVariable;
 import java.util.Locale;
 
 /**
@@ -25,34 +26,34 @@ import java.util.Locale;
  *
  * <p><b>This class is not thread-safe and should only be used from the main thread.</b>
  */
-public class RangeVariable extends Variable<Integer> {
+public class RangeVariable extends Variable<Float> {
 
-  protected static final String INVALID_RANGE_ERROR_FORMAT =
-      "Invalid range for Variable %s min: %d, max: %d";
-  protected static final String NEGATIVE_STEPPING_ERROR_FORMAT =
-      "Stepping must be >= 1, Variable %s has increment %d";
-  protected static final String STEP_INCREMENT_INVALID_FOR_RANGE_ERROR_FORMAT =
-      "Variable %s: incorrect increment, can't get to %s %d from minValue %d using"
-          + " increment %d";
-  protected static final String NEW_VALUE_OUT_OF_BOUNDS_ERROR_FORMAT =
-      "%d is out of bounds for Variable %s: min: %d, max: %d";
-  private final int minValue;
-  private final int maxValue;
-  private final int increment;
+  private static final String INVALID_RANGE_ERROR_FORMAT =
+      "Invalid range for Variable %s min: %f, max: %f";
+  private static final String NEGATIVE_STEPPING_ERROR_FORMAT =
+      "Stepping must be > 0, Variable %s has increment %f";
+  private static final String STEP_INCREMENT_INVALID_FOR_RANGE_ERROR_FORMAT =
+      "Variable %s: incorrect increment, can't get to %s %f from minValue %f using"
+          + " increment %f";
+  private static final String NEW_VALUE_OUT_OF_BOUNDS_ERROR_FORMAT =
+      "%f is out of bounds for Variable %s: min: %f, max: %f";
+  private final float minValue;
+  private final float maxValue;
+  private final float increment;
 
   /**
-   * Constructor that checks correctness of the range, validates {@code defaultValue} and runs
+   * Constructor that checks correctness of the range, validates {@code initialValue} and runs
    * {@code callback}.
    *
    * @param title The name of this variable to be displayed in the UI.
    * @param key The key to store in SharedPreferences.
-   * @param defaultValue The default value in case there is none in SharedPreferences.
+   * @param initialValue The initial value for this variable.
    * @param minValue The minimum value for this variable.
    * @param maxValue The maximum value for this variable.
    * @param increment A value that defines each step. Must be a positive integer. So if you have
    *     {@code minValue = 0 && maxValue = 12 && increment = 4}, only 0, 4, 8, 12 are possible
    *     values.
-   * @param parentObject the object which created this variable, should be an activity.
+   * @param context the object which created this variable, should be an activity.
    * @param callback A callback to run when successfully initialized and when the value changes. Can
    *     be null.
    * @param layoutId A layout id that renders this control on screen.
@@ -60,17 +61,17 @@ public class RangeVariable extends Variable<Integer> {
    *     (maxValue - minValue) % increment != 0} which means the current increment setting can't
    *     possibly get from minValue to maxValue.
    */
-  public RangeVariable(
+  private RangeVariable(
       String title,
       String key,
-      int defaultValue,
-      int minValue,
-      int maxValue,
-      int increment,
-      Object parentObject,
-      Callback<Integer> callback,
+      float initialValue,
+      float minValue,
+      float maxValue,
+      float increment,
+      Object context,
+      Callback<Float> callback,
       int layoutId) {
-    super(title, key, defaultValue, parentObject, callback, layoutId);
+    super(title, key, initialValue, context, callback, layoutId, DataType.NUMBER);
     this.minValue = minValue;
     this.maxValue = maxValue;
     this.increment = increment;
@@ -91,7 +92,7 @@ public class RangeVariable extends Variable<Integer> {
   }
 
   private void checkStepIncrement() {
-    if (increment < 1) {
+    if (increment <= 0) {
       throw new IllegalArgumentException(
           String.format(
               Locale.getDefault(),
@@ -102,7 +103,7 @@ public class RangeVariable extends Variable<Integer> {
     checkValueAndStep(maxValue, "maxValue");
   }
 
-  private void checkValueAndStep(int value, String valueName) {
+  private void checkValueAndStep(float value, String valueName) {
     if ((value - minValue) % increment != 0) {
       throw new IllegalArgumentException(
           String.format(
@@ -117,7 +118,7 @@ public class RangeVariable extends Variable<Integer> {
   }
 
   @Override
-  protected void checkValue(Integer newValue) {
+  protected void checkValue(Float newValue) {
     if (newValue < minValue || newValue > maxValue) {
       throw new IllegalArgumentException(
           String.format(
@@ -131,16 +132,23 @@ public class RangeVariable extends Variable<Integer> {
     checkValueAndStep(newValue, "newValue");
   }
 
-  public int getMinValue() {
+  public float getMinValue() {
     return minValue;
   }
 
-  public int getMaxValue() {
+  public float getMaxValue() {
     return maxValue;
   }
 
-  public int getIncrement() {
+  public float getIncrement() {
     return increment;
+  }
+
+  /**
+   * Gets the serializable constraints string for this variable.
+   */
+  public String getSerializableConstraints() {
+    return StoredVariable.RANGE_VARIABLE_CONSTRAINT;
   }
 
   /**
@@ -149,72 +157,38 @@ public class RangeVariable extends Variable<Integer> {
    *
    * <p>This builder assumes a few things for your convenience:
    * <ul>
-   * <li>If the default value is not set, minValue will be used as the default value.
+   * <li>If the initial value is not set, minValue will be used as the initial value.
    * <li>If the increment is not set, 1 will be used.
    * <li>If the layout id is not set, the default layout will be used.
    * <li>If the title is not set, the key will be used as title
    * </ul>
    *
-   * <p>On the other hand: key, minValue and maxValue are mandatory. If any of these are missing or
-   * the settings are incorrect according to the logic of {@link RangeVariable} an
-   * {@link IllegalArgumentException} will be thrown.
+   * <p>On the other hand: key, minValue, maxValue, dataType, and context are mandatory. If any of
+   * these are missing or the settings are incorrect according to the logic of {@link RangeVariable}
+   * an {@link IllegalArgumentException} will be thrown.
    */
-  public static class Builder {
+  public static class Builder extends BaseVariableBuilder<RangeVariable, Float> {
 
-    private String key;
-    private String title;
-    private Integer defaultValue;
-    private Integer minValue;
-    private Integer maxValue;
-    private int increment = 1;
-    private Object parentObject;
-    private Callback<Integer> callback;
-    private int layoutId = 0;
+    private Float minValue;
+    private Float maxValue;
+    private float increment = 1;
 
-    public Builder() {}
-
-    public Builder setKey(String key) {
-      this.key = key;
-      return this;
+    public Builder() {
+      setDataType(DataType.NUMBER);
     }
 
-    public Builder setParentObject(Object parentObject) {
-      this.parentObject = parentObject;
-      return this;
-    }
-
-    public Builder setTitle(String title) {
-      this.title = title;
-      return this;
-    }
-
-    public Builder setMinValue(int minValue) {
+    public Builder setMinValue(float minValue) {
       this.minValue = minValue;
       return this;
     }
 
-    public Builder setMaxValue(int maxValue) {
+    public Builder setMaxValue(float maxValue) {
       this.maxValue = maxValue;
       return this;
     }
 
-    public Builder setIncrement(int increment) {
+    public Builder setIncrement(float increment) {
       this.increment = increment;
-      return this;
-    }
-
-    public Builder setDefaultValue(int defaultValue) {
-      this.defaultValue = defaultValue;
-      return this;
-    }
-
-    public Builder setCallback(Callback<Integer> callback) {
-      this.callback = callback;
-      return this;
-    }
-
-    public Builder setLayoutId(int layoutId) {
-      this.layoutId = layoutId;
       return this;
     }
 
@@ -224,24 +198,16 @@ public class RangeVariable extends Variable<Integer> {
      * @throws IllegalArgumentException If key, minValue or maxValue are missing, or if these
      *     settings are incorrect for {@link RangeVariable}
      */
-    public RangeVariable buildAndInit() {
+    public RangeVariable build() {
       if (minValue == null || maxValue == null) {
         throw new IllegalArgumentException("minValue and maxValue must not be null");
       }
-      if (defaultValue == null) {
-        defaultValue = minValue;
+      if (initialValue == null) {
+        initialValue = minValue;
       }
-      if (key == null) {
-        throw new IllegalArgumentException("key cannot be unset for RangeVariable");
-      }
-      if (parentObject == null) {
-        throw new IllegalArgumentException("parentObject cannot be unset for RangeVariable");
-      }
-      if (title == null) {
-        title = key;
-      }
+      checkBaseFields();
       RangeVariable variable = new RangeVariable(
-          title, key, defaultValue, minValue, maxValue, increment, parentObject, callback,
+          title, key, initialValue, minValue, maxValue, increment, context, callback,
           layoutId);
       variable.init();
       return variable;

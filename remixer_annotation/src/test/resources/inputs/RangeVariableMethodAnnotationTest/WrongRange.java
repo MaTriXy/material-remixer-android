@@ -16,9 +16,7 @@
 
 package somepackage;
 
-import com.google.android.libraries.remixer.Remixer;
 import com.google.android.libraries.remixer.annotation.RangeVariableMethod;
-import com.google.android.libraries.remixer.annotation.RemixerInstance;
 
 public class WrongRange {
 
@@ -26,5 +24,5 @@ public class WrongRange {
    * minValue > maxValue, should fail.
    */
   @RangeVariableMethod(minValue = 15, maxValue = 0)
-  public void fail(Integer i){}
+  public void fail(Float i){}
 }

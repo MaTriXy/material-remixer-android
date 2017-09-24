@@ -44,7 +44,7 @@ import java.util.List;
  * indicated with a contrasting checkmark.
  */
 public class ColorListVariableWidget extends LinearLayout
-    implements RemixerItemWidget<ItemListVariable<Integer>> {
+    implements RemixerWidget<ItemListVariable<Integer>> {
 
   private final Adapter adapter = new Adapter();
   private TextView nameText;
@@ -72,7 +72,7 @@ public class ColorListVariableWidget extends LinearLayout
   }
 
   @Override
-  public void bindRemixerItem(@NonNull final ItemListVariable<Integer> variable) {
+  public void bindVariable(@NonNull final ItemListVariable<Integer> variable) {
     adapter.setVariable(variable);
     nameText.setText(variable.getTitle());
   }
@@ -97,6 +97,10 @@ public class ColorListVariableWidget extends LinearLayout
   @VisibleForTesting
   static class Adapter extends RecyclerView.Adapter<ViewHolder> {
 
+    Adapter() {
+      // Explicit constructor, see https://code.google.com/p/android/issues/detail?id=235661
+    }
+
     private final List<ColorItem> values = new ArrayList<>();
     private ItemListVariable<Integer> variable;
 
@@ -108,7 +112,7 @@ public class ColorListVariableWidget extends LinearLayout
     public void setVariable(ItemListVariable<Integer> variable) {
       this.variable = variable;
       values.clear();
-      for (Integer color : variable.getValueList()) {
+      for (Integer color : variable.getLimitedToValues()) {
         ColorItem colorItem = new ColorItem(color, color.equals(variable.getSelectedValue()));
         values.add(colorItem);
       }

@@ -24,8 +24,10 @@ buildscript {
   }
 
   dependencies {
-    classpath 'com.android.tools.build:gradle:2.2.0'
-    classpath 'com.neenbedankt.gradle.plugins:android-apt:1.8'
+    classpath 'com.android.tools.build:gradle:2.2.3'
+    classpath 'com.github.dcendents:android-maven-gradle-plugin:1.4.1'
+    classpath 'com.google.gms:google-services:3.0.0'
+    classpath 'com.vanniktech:gradle-android-junit-jacoco-plugin:0.5.0'
   }
 }
 
@@ -43,9 +45,47 @@ subprojects {
     configFile = rootProject.file('checkstyle.xml')
     toolVersion = '7.1'
   }
+
+  ext {
+    sourceSetForJavadoc = null
+    classpathForJavadoc = null
+  }
+
+  afterEvaluate { project ->
+    if (project.name != ":remixer") {
+      // Create the sourceset and classpath variables.
+      if (project.hasProperty('android')) {
+        project.ext {
+          sourceSetForJavadoc = project.android.sourceSets.main.java.sourceFiles
+          classpathForJavadoc = files(project.android.getBootClasspath().join(File.pathSeparator)) + project.configurations.compile
+        }
+      } else {
+        project.ext {
+          sourceSetForJavadoc = sourceSets.main.allJava
+          classpathForJavadoc = sourceSets.main.compileClasspath
+        }
+      }
+    }
+  }
+
 }
 
 task clean(type: Delete) {
   delete rootProject.buildDir
 }
 
+ext {
+  // Force release proguard when running on a Continuous Integration environment (like TravisCI).
+  forceReleaseProguard = System.getenv("CI").equals("true");
+  // Sdk and tools
+  minSdkVersion = 16
+  targetSdkVersion = 25
+  compileSdkVersion = 25
+  buildToolsVersion = '25.0.2'
+  supportLibraryVersion = '25.3.1'
+  gsonVersion = '2.8.0'
+  junitVersion = '4.12'
+  mockitoVersion = '1.9.5'
+  robolectricVersion = '3.3.2'
+  firebaseVersion = '10.0.1'
+}

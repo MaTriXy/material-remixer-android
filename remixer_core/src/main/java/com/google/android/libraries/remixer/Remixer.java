@@ -16,29 +16,55 @@
 
 package com.google.android.libraries.remixer;
 
+import com.google.android.libraries.remixer.sync.LocalValueSyncing;
+import com.google.android.libraries.remixer.sync.SynchronizationMechanism;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
- * Contains a list of {@link Variable}es.
+ * Contains a list of {@link Variable}s.
+ *
+ * <p>The Remixer object is the heart and soul of Remixer as a framework, it coordinates syncing and
+ * value changes.
+ *
+ * <p>For value and data syncing/persistence (both locally across activities, and persisting/saving
+ * to cloud backends, etc) and keeping a global state, the Remixer object relies on a {@link
+ * SynchronizationMechanism} set at initialization time (usually in your Application.onCreate()).
+ *
+ * <p>If you do not set a SynchronizationMechanism, remixer will use {@link LocalValueSyncing},
+ * which will not persist any data but will synchronize across activities.
  */
 public class Remixer {
 
   private static Remixer instance;
 
   /**
-   * This is a map of Remixer Item keys to a list of remixer items that have that key.
+   * Datatypes keyed by their serializable name.
+   */
+  private static Map<String, DataType> registeredDataTypes = new HashMap<>();
+
+  /**
+   * This is a map of Remixer keys to a list of variables that have that key.
    *
-   * <p>There may be several RemixerItems for the same key because the key can be reused in
+   * <p>There may be several variables for the same key because the key can be reused in
    * different activities and the value has to be shared across those.
    */
-  private HashMap<String, List<RemixerItem>> keyMap;
+  private Map<String, List<Variable>> keyMap;
+
   /**
-   * A list of all the Remixer Items added to the Remixer.
+   * This is a map of contexts to a list of variables for the given context.
    */
-  private List<RemixerItem> remixerItems;
+  private Map<Object, List<Variable>> contextMap;
+
+  /**
+   * The synchronization mechanism used to keep values in sync across different instances of the
+   * variables and save/sync to other devices.
+   */
+  private SynchronizationMechanism synchronizationMechanism;
 
   /**
    * Gets the singleton for Remixer.
@@ -53,113 +79,166 @@ public class Remixer {
     return instance;
   }
 
-  Remixer() {
-    keyMap = new HashMap<>();
-    remixerItems = new ArrayList<>();
+  /**
+   * Register a new data type that can be used with Remixer.
+   */
+  public static void registerDataType(DataType dataType) {
+    if (registeredDataTypes.containsKey(dataType.getName())) {
+      throw new IllegalStateException("Adding a data type that has already been added, name: "
+          + dataType.getName() );
+    }
+    registeredDataTypes.put(dataType.getName(), dataType);
+  }
+
+  public static DataType getDataType(String name) {
+    return registeredDataTypes.get(name);
+  }
+
+  public static Collection<DataType> getRegisteredDataTypes() {
+    return registeredDataTypes.values();
   }
 
   /**
-   * This adds a remixer item ({@link Variable} or {@link Trigger}) to be tracked and displayed.
-   * Checks that the remixer item is compatible with the existing remixer items with the same key.
-   *
-   * <p>This method also removes old remixer items whose parent objects have been reclaimed by the
-   * Garbage collector which are being replaced by items from the same class of parent objects.
-   * No items are removed until equivalent ones from the same parent object class are added to
-   * replace them. This guarantees that no incompatible items for the same key are ever accepted.
-   *
-   * @param remixerItem The remixer item to be added.
-   * @throws IncompatibleRemixerItemsWithSameKeyException Other items with the same key have been
-   *     added by other parent objects with incompatible types.
-   * @throws DuplicateKeyException Another item with the same key was added by the same parent
-   *     object.
+   * Visible only for testing. Do not use.
    */
-  @SuppressWarnings("unchecked")
-  public void addItem(RemixerItem remixerItem) {
-    List<RemixerItem> listForKey = getItemsWithKey(remixerItem.getKey());
-    List<RemixerItem> itemsToRemove = new ArrayList<>();
-    for (RemixerItem existingItem : listForKey) {
-      existingItem.assertIsCompatibleWith(remixerItem);
-      if (!existingItem.hasParentObject()) {
-        // The parent activity has been reclaimed by the OS already. It has no callback and it's
-        // still around for keeping the value in sync, saving and checking consistency across types.
-        // Since we're adding a new item that has been asserted to be compatible, it is not
-        // necessary to keep this instance around.
-        itemsToRemove.add(existingItem);
-      } else {
-        // The parent activity is still alive and kicking.
-        if (existingItem.isParentObject(remixerItem.getParentObject())) {
-          // An object with the same key for the same parent object, this shouldn't happen so throw
-          // an exception.
-          throw new DuplicateKeyException(
-              String.format(
-                  Locale.getDefault(),
-                  "Duplicate key %s being used in class %s",
-                  remixerItem.getKey(),
-                  remixerItem.getParentObject().getClass().getCanonicalName()
-              ));
-        }
-      }
-    }
-    for (RemixerItem remove : itemsToRemove) {
-      listForKey.remove(remove);
-      remixerItems.remove(remove);
-    }
-    if (remixerItem instanceof Variable && listForKey.size() > 0) {
-      // Make sure that variables use their current value if it has been modified in another
-      // context.
-      // If any modification has been made in any other context to the value of variables with the
-      // same key, otherVariable will have the newest value.
-      Variable otherVariable = (Variable) listForKey.get(0);
-      // At this point newVariable will have the default value only.
-      Variable newVariable = (Variable) remixerItem;
-      // Make newVariable have the current value found in variables that have already been added to
-      // the Remixer.
-      newVariable.setValueWithoutNotifyingOthers(otherVariable.getSelectedValue());
-    }
-    listForKey.add(remixerItem);
-    remixerItem.setRemixer(this);
-    remixerItems.add(remixerItem);
+  public static void clearRegisteredDataTypes() {
+    registeredDataTypes.clear();
   }
 
-  List<RemixerItem> getItemsWithKey(String key) {
-    List<RemixerItem> list = null;
-    if (keyMap.containsKey(key)) {
-      list = keyMap.get(key);
+  /**
+   * Visible only for testing. Users should only use {@link #getInstance()}.
+   */
+  public Remixer() {
+    keyMap = new HashMap<>();
+    contextMap = new HashMap<>();
+    synchronizationMechanism = new LocalValueSyncing();
+    synchronizationMechanism.setRemixerInstance(this);
+  }
+
+  /**
+   * Set the synchronization mechanism to keep variables in sync locally and (possibly) with
+   * external sources.
+   *
+   * <p>Remixer relies on a SynchronizationMechanism instance to be the source of truth of the
+   * values and configuration.
+   */
+  public void setSynchronizationMechanism(SynchronizationMechanism synchronizationMechanism) {
+    if (this.synchronizationMechanism != null) {
+      this.synchronizationMechanism.setRemixerInstance(null);
+    }
+    this.synchronizationMechanism = synchronizationMechanism;
+    if (synchronizationMechanism != null) {
+      synchronizationMechanism.setRemixerInstance(this);
+    }
+  }
+
+  public SynchronizationMechanism getSynchronizationMechanism() {
+    return synchronizationMechanism;
+  }
+
+  /**
+   * This adds a {@link Variable} to be tracked and displayed.
+   * Checks that the variable is compatible with the existing variables with the same key.
+   *
+   * <p>This method also removes old variables whose contexts have been reclaimed by the garbage
+   * collector which are being replaced by items from the same class of context. No items are
+   * removed until equivalent ones from the same context class are added to replace them. This
+   * guarantees that no incompatible items for the same key are ever accepted.
+   *
+   * @param variable The variable to be added. It must have a context object otherwise it
+   *     will never be displayed, and thus not be editable.
+   * @throws IncompatibleRemixerItemsWithSameKeyException Other items with the same key have been
+   *     added other contexts with incompatible types.
+   * @throws DuplicateKeyException Another item with the same key was added for the same context.
+   */
+  @SuppressWarnings("unchecked")
+  public void addItem(Variable variable) {
+    if (!registeredDataTypes.containsKey(variable.getDataType().getName())) {
+      throw new IllegalStateException(String.format(
+          Locale.getDefault(),
+          "There is no registered data type that matches %s. Are you sure you ran "
+          + "RemixerInitialization.initRemixer in your application class? See the Remixer README "
+          + "for detailed instructions. If this is a custom data type you have to manually add it.",
+          variable.getDataType().getName()));
+    }
+    List<Variable> listForKey = getOrCreateVariableList(variable.getKey(), keyMap);
+    for (Variable existingItem : listForKey) {
+      if (variable.getContext() != null
+          && variable.getContext() == existingItem.getContext()) {
+        // An object with the same key for the same parent object, this shouldn't happen so throw
+        // an exception.
+        throw new DuplicateKeyException(
+            String.format(
+                Locale.getDefault(),
+                "Duplicate key %s being used in class %s",
+                variable.getKey(),
+                existingItem.getContext().getClass().getCanonicalName()
+            ));
+      }
+    }
+    if (synchronizationMechanism != null) {
+      // Notify the synchronization mechanism, which will take care of keeping the values in sync
+      // and checking compatibility.
+      synchronizationMechanism.onAddingVariable(variable);
+    }
+    variable.setRemixer(this);
+    listForKey.add(variable);
+    getOrCreateVariableList(variable.getContext(), contextMap).add(variable);
+  }
+
+  /**
+   * Gets the list of items that have the given key.
+   */
+  public List<Variable> getVariablesWithKey(String key) {
+    return keyMap.get(key);
+  }
+
+  /**
+   * Gets all the variables associated with {@code context}. {@code context} is expected to be
+   * an Activity, it is Object here because remixer_core cannot depend on the Android SDK.
+   */
+  public List<Variable> getVariablesWithContext(Object context) {
+    return contextMap.get(context);
+  }
+
+  /**
+   * Gets a list of RemixerItems for the given {@code key} from the {@code map} passed in, if such a
+   * mapping does not exist, it adds a mapping to a new empty list.
+   */
+  private static <T> List<Variable> getOrCreateVariableList(
+      T key, Map<T, List<Variable>> map) {
+    List<Variable> list = null;
+    if (map.containsKey(key)) {
+      list = map.get(key);
     } else {
       list = new ArrayList<>();
-      keyMap.put(key, list);
+      map.put(key, list);
     }
     return list;
   }
 
-  public List<RemixerItem> getRemixerItems() {
-    return remixerItems;
+  /**
+   * Notifies the synchronization mechanism that this variable's value has changed.
+   */
+  void onValueChanged(Variable variable) {
+    synchronizationMechanism.onValueChanged(variable);
   }
 
   /**
-   * Gets all the Remixer Items associated with the parent object {@code parent}. {@code parent} is
-   * expected to be an Activity, it is Object here because remixer_core cannot depend on the Android
-   * SDK.
+   * Removes variables whose context is {@code activity}. This makes sure {@code activity}
+   * doesn't leak through their callbacks.
    */
-  public List<RemixerItem> getRemixerItemsForParentObject(Object parent) {
-    List<RemixerItem> result = new ArrayList<>();
-    for (RemixerItem item : remixerItems) {
-      if (item.isParentObject(parent)) {
-        result.add(item);
+  public void onActivityDestroyed(Object activity) {
+    if (contextMap.containsKey(activity)) {
+      for (Variable variable : contextMap.get(activity)) {
+        List<Variable> listForKey = getVariablesWithKey(variable.getKey());
+        listForKey.remove(variable);
+        if (listForKey.size() == 0) {
+          keyMap.remove(variable.getKey());
+        }
       }
-    }
-    return result;
-  }
-
-  /**
-   * Removes callbacks for all remixes whose parent object is {@code activity}. This makes sure
-   * {@code activity} doesn't leak through its callbacks.
-   */
-  public void cleanUpCallbacks(Object activity) {
-    for (RemixerItem remixerItem : remixerItems) {
-      if (remixerItem.isParentObject(activity)) {
-        remixerItem.clearCallback();
-      }
+      contextMap.remove(activity);
     }
   }
 }
+

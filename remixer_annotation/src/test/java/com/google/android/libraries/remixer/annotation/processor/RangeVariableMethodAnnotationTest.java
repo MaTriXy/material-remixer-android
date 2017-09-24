@@ -46,7 +46,7 @@ public class RangeVariableMethodAnnotationTest {
         .that(file)
         .processedWith(allProcessors)
         .failsToCompile()
-        .withErrorContaining("Integer")
+        .withErrorContaining("Float")
         .in(file);
   }
 
@@ -70,20 +70,33 @@ public class RangeVariableMethodAnnotationTest {
         .that(file)
         .processedWith(allProcessors)
         .failsToCompile()
-        .withErrorContaining("defaultValue was explicitly set out of bounds")
+        .withErrorContaining("initialValue was explicitly set out of bounds")
         .in(file);
   }
 
   @Test
-  public void buildsAndFixesDefaultValue() {
+  public void buildsAndFixesInitialValue() {
     JavaFileObject file = JavaFileObjects
-        .forResource("inputs/RangeVariableMethodAnnotationTest/FixesDefaultValue.java");
+        .forResource("inputs/RangeVariableMethodAnnotationTest/FixesInitialValue.java");
     Truth.assert_().about(JavaSourceSubjectFactory.javaSource())
         .that(file)
         .processedWith(allProcessors)
         .compilesWithoutError()
         .and()
         .generatesSources(JavaFileObjects
-            .forResource("outputs/RangeVariableMethodAnnotationTest/FixesDefaultValue.java"));
+            .forResource("outputs/RangeVariableMethodAnnotationTest/FixesInitialValue.java"));
+  }
+
+  @Test
+  public void correct() {
+    JavaFileObject file = JavaFileObjects
+        .forResource("inputs/RangeVariableMethodAnnotationTest/Correct.java");
+    Truth.assert_().about(JavaSourceSubjectFactory.javaSource())
+        .that(file)
+        .processedWith(allProcessors)
+        .compilesWithoutError()
+        .and()
+        .generatesSources(JavaFileObjects
+            .forResource("outputs/RangeVariableMethodAnnotationTest/Correct.java"));
   }
 }

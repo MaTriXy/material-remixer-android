@@ -28,12 +28,12 @@ import org.mockito.MockitoAnnotations;
 public class RangeVariableTest {
 
   @Mock
-  Callback<Integer> singleIncrementsCallback;
+  Callback<Float> singleIncrementsCallback;
   @Mock
-  Callback<Integer> increments5Callback;
+  Callback<Float> increments5Callback;
 
-  RangeVariable singleIncrements;
-  RangeVariable increments5;
+  private RangeVariable singleIncrements;
+  private RangeVariable increments5;
 
   /**
    * Sets up the test.
@@ -41,58 +41,115 @@ public class RangeVariableTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    singleIncrements = new RangeVariable(
-        "name", "key", 15, 0, 20, 1, this, singleIncrementsCallback, 0);
-    singleIncrements.init();
-    increments5 = new RangeVariable("name", "key", 15, 0, 20, 5, this, increments5Callback, 0);
-    increments5.init();
+    singleIncrements =
+        new RangeVariable.Builder()
+            .setMinValue(0f)
+            .setMaxValue(20f)
+            .setIncrement(1f)
+            .setInitialValue(15f)
+            .setCallback(singleIncrementsCallback)
+            .setKey("key")
+            .setContext(this)
+            .build();
+    increments5 =
+        new RangeVariable.Builder()
+            .setMinValue(0f)
+            .setMaxValue(20f)
+            .setIncrement(5f)
+            .setInitialValue(15f)
+            .setCallback(increments5Callback)
+            .setKey("key")
+            .setContext(this)
+            .build();
   }
 
   @Test(expected = IllegalArgumentException.class)
-  public void initDoesNotAcceptDefaultValueGreaterThanMax() {
-    new RangeVariable("name", "key", 15, 0, 10, 1, this, null, 0).init();
+  public void initDoesNotAcceptInitialValueGreaterThanMax() {
+    new RangeVariable.Builder()
+        .setMinValue(0f)
+        .setMaxValue(10f)
+        .setIncrement(5f)
+        .setInitialValue(15f)
+        .setKey("key")
+        .setContext(this)
+        .build();
   }
 
   @Test(expected = IllegalArgumentException.class)
-  public void initDoesNotAcceptDefaultValueLessThanMin() {
-    new RangeVariable("name", "key", 15, 20, 30, 1, this, null, 0).init();
+  public void initDoesNotAcceptInitialValueLessThanMin() {
+    new RangeVariable.Builder()
+        .setMinValue(10f)
+        .setMaxValue(20f)
+        .setIncrement(5f)
+        .setInitialValue(5f)
+        .setKey("key")
+        .setContext(this)
+        .build();
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void constructorDoesNotAcceptInvalidRanges() {
-    new RangeVariable("name", "key", 15, 50, 20, 1, this, null, 0).init();
+    new RangeVariable.Builder()
+        .setMinValue(50f)
+        .setMaxValue(20f)
+        .setIncrement(1f)
+        .setInitialValue(15f)
+        .setKey("key")
+        .setContext(this)
+        .build();
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void constructorDoesNotAcceptNegativeStepping() {
-    new RangeVariable("name", "key", 15, 50, 20, -1, this, null, 0).init();
+    new RangeVariable.Builder()
+        .setMinValue(0f)
+        .setMaxValue(20f)
+        .setIncrement(-1f)
+        .setInitialValue(15f)
+        .setKey("key")
+        .setContext(this)
+        .build();
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void constructorDoesNotAcceptInvalidStepping() {
     // Stepping is invalid because maxValue 52 cannot be reached from 15 in steps of 5
-    new RangeVariable("name", "key", 15, 0, 52, 5, this, null, 0).init();
+    new RangeVariable.Builder()
+        .setMinValue(0f)
+        .setMaxValue(52f)
+        .setIncrement(5f)
+        .setInitialValue(15f)
+        .setKey("key")
+        .setContext(this)
+        .build();
   }
 
   @Test(expected = IllegalArgumentException.class)
-  public void initDoesNotAcceptInvalidSteppingToDefaultValue() {
-    // Stepping is invalid because defaultValue 22 cannot be reached from 15 in steps of 5
-    new RangeVariable("name", "key", 22, 0, 50, 5, this, null, 0).init();
+  public void initDoesNotAcceptInvalidSteppingToInitialValue() {
+    // Stepping is invalid because initialValue 22 cannot be reached from 15 in steps of 5
+    new RangeVariable.Builder()
+        .setMinValue(0f)
+        .setMaxValue(50f)
+        .setIncrement(5f)
+        .setInitialValue(22f)
+        .setKey("key")
+        .setContext(this)
+        .build();
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void setValueRejectsValueLessThanMin() {
-    singleIncrements.setValue(-1);
+    singleIncrements.setValue(-1f);
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void setValueRejectsValueGreaterThanMax() {
-    singleIncrements.setValue(100);
+    singleIncrements.setValue(100f);
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void setValueRejectsInvalidValueForStepping() {
-    increments5.setValue(12);
+    increments5.setValue(12f);
   }
 
   @Test
@@ -102,16 +159,23 @@ public class RangeVariableTest {
 
   @Test
   public void callbackIsCalledAfterValueSet() {
-    singleIncrements.setValue(18);
+    singleIncrements.setValue(18f);
     Mockito.verify(singleIncrementsCallback, Mockito.times(2)).onValueSet(singleIncrements);
-    increments5.setValue(5);
+    increments5.setValue(5f);
     Mockito.verify(increments5Callback, Mockito.times(2)).onValueSet(increments5);
   }
 
   @Test
   public void doesNotCrashOnNullCallback() {
-    RangeVariable variable = new RangeVariable("name", "key", 15, 0, 20, 1, this, null, 0);
-    variable.init();
-    variable.setValue(18);
+    RangeVariable variable =
+        new RangeVariable.Builder()
+            .setMinValue(0f)
+            .setMaxValue(20f)
+            .setIncrement(1f)
+            .setInitialValue(15f)
+            .setKey("key")
+            .setContext(this)
+            .build();
+    variable.setValue(18f);
   }
 }

@@ -23,8 +23,9 @@ import static org.mockito.Mockito.verify;
 import android.view.LayoutInflater;
 import android.widget.Switch;
 import android.widget.TextView;
-import com.google.android.libraries.remixer.Variable;
+import com.google.android.libraries.remixer.BooleanVariableBuilder;
 import com.google.android.libraries.remixer.Callback;
+import com.google.android.libraries.remixer.Variable;
 import com.google.android.libraries.remixer.ui.R;
 import org.junit.Before;
 import org.junit.Test;
@@ -56,17 +57,16 @@ public class BooleanVariableWidgetTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    variable = new Variable<>(
-        TITLE,
-        KEY,
-        DEFAULT_VALUE,
-        this,
-        mockCallback,
-        R.layout.boolean_variable_widget);
-    variable.init();
+    variable = new BooleanVariableBuilder()
+        .setInitialValue(DEFAULT_VALUE)
+        .setTitle(TITLE)
+        .setKey(KEY)
+        .setContext(this)
+        .setCallback(mockCallback)
+        .build();
     view = (BooleanVariableWidget) LayoutInflater.from(RuntimeEnvironment.application)
         .inflate(R.layout.boolean_variable_widget, null);
-    view.bindRemixerItem(variable);
+    view.bindVariable(variable);
     variableSwitch = (Switch) view.findViewById(R.id.variableSwitch);
     name = (TextView) view.findViewById(R.id.variableName);
   }
@@ -82,6 +82,15 @@ public class BooleanVariableWidgetTest {
     // Check that the callback  was called. This should've happened during setUp()
     verify(mockCallback, times(1)).onValueSet(variable);
     variableSwitch.toggle();
+    // After changing the text, check that the callback was called once again
+    verify(mockCallback, times(2)).onValueSet(variable);
+  }
+
+  @Test
+  public void callbackIsCalledOnNameClick() {
+    // Check that the callback  was called. This should've happened during setUp()
+    verify(mockCallback, times(1)).onValueSet(variable);
+    name.performClick();
     // After changing the text, check that the callback was called once again
     verify(mockCallback, times(2)).onValueSet(variable);
   }
